@@ -1,0 +1,6 @@
+import * as XLSX from 'xlsx';
+import {requireSupabase} from '../lib/supabase';
+import {normalizeName} from '../lib/utils';
+import type {ExcelRow} from '../types';
+export async function parseSpreadsheet(file:File):Promise<{headers:string[];rows:Record<string,string>[]}>{if(file.size>5*1024*1024)throw new Error('Excel/CSV file must be 5 MB or smaller.');const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:'array',cellDates:false});const ws=wb.Sheets[wb.SheetNames[0]];if(!ws)throw new Error('The file contains no worksheet.');const rows=XLSX.utils.sheet_to_json<Record<string,unknown>>(ws,{defval:''});if(!rows.length)throw new Error('The spreadsheet is empty.');const headers=Object.keys(rows[0]);return {headers,rows:rows.map(r=>Object.fromEntries(Object.entries(r).map(([k,v])=>[k,String(v??'')] )))};}
+export async function importCertificates(rows:ExcelRow[],templateId:string){const sb=requireSupabase();const payload=rows.map(r=>({recipient_name:r.name,normalized_name:normalizeName(r.name),template_id:templateId,status:'active'}));const {data,error}=await sb.from('certificates').insert(payload).select('id,certificate_id,recipient_name,normalized_name,template_id,status,created_at,updated_at');if(error)throw error;return data;}
